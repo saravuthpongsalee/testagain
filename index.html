@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ESP32 Web Flasher PRO</title>
+
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+body {
+  background: linear-gradient(135deg,#0b1220,#0f172a);
+}
+
+.led {
+  width:12px;height:12px;border-radius:50%;
+  background:#22c55e;
+  box-shadow:0 0 10px #22c55e;
+  animation:blink 1s infinite;
+}
+
+@keyframes blink{
+  0%,100%{opacity:1}
+  50%{opacity:.2}
+}
+</style>
+</head>
+
+<body class="text-white p-6">
+
+<h1 class="text-3xl font-bold mb-4">⚡ ESP32 Web Flasher PRO</h1>
+
+<div class="mb-4 flex gap-4 items-center">
+  <div class="led"></div>
+  <div id="time"></div>
+</div>
+
+<div class="bg-gray-900 p-4 rounded-xl mb-4">
+
+<label>bootloader.bin</label>
+<input id="boot" class="w-full p-2 text-black mb-2" value="http://localhost:8000/bootloader.bin">
+
+<label>partitions.bin</label>
+<input id="part" class="w-full p-2 text-black mb-2" value="http://localhost:8000/partitions.bin">
+
+<label>firmware.bin</label>
+<input id="fw" class="w-full p-2 text-black mb-2" value="http://localhost:8000/firmware.bin">
+
+<button onclick="gen()" class="bg-blue-600 px-4 py-2 rounded">สร้าง Manifest</button>
+
+</div>
+
+<textarea id="out" class="w-full h-40 text-black p-2 mb-4"></textarea>
+
+<!-- Progress -->
+<div class="w-full bg-gray-700 h-4 rounded mb-4">
+  <div id="bar" class="h-4 bg-green-400 w-0 rounded"></div>
+</div>
+
+<!-- Buttons -->
+<div class="flex gap-4 mb-6">
+
+<esp-web-install-button id="flashBtn">
+  <button slot="activate" onclick="startFlash()" class="bg-green-600 px-4 py-2 rounded">
+    Flash ESP32
+  </button>
+</esp-web-install-button>
+
+<button onclick="eraseFlash()" class="bg-red-600 px-4 py-2 rounded">
+  Erase Flash
+</button>
+
+</div>
+
+<script>
+
+let manifestURL = null;
+
+
+setInterval(()=>{
+  document.getElementById("time").innerText =
+    new Date().toLocaleString("th-TH");
+},1000);
+
+
+function gen(){
+
+const m = {
+  name:"ESP32",
+  version:"1.0",
+  builds:[{
+    chipFamily:"ESP32",
+    parts:[
+      {path:boot.value,offset:4096},
+      {path:part.value,offset:32768},
+      {path:fw.value,offset:65536}
+    ]
+  }]
+};
+
+out.value = JSON.stringify(m,null,2);
+if(manifestURL) URL.revokeObjectURL(manifestURL);
+const blob = new Blob([JSON.stringify(m)],{type:"application/json"});
+manifestURL = URL.createObjectURL(blob);
+flashBtn.setAttribute("manifest",manifestURL);
+
+}
+
+
+function startFlash(){
+  let p=0;
+  let bar=document.getElementById("bar");
+  let timer=setInterval(()=>{
+    p+=5;
+    bar.style.width=p+"%";
+    if(p>=100) clearInterval(timer);
+  },200);
+}
+
+
+async function eraseFlash(){
+
+try{
+
+const port = await navigator.serial.requestPort();
+await port.open({ baudRate: 115200 });
+
+const writer = port.writable.getWriter();
+
+
+await writer.write(new Uint8Array([0x00]));
+await writer.releaseLock();
+
+alert("กรุณากดปุ่ม BOOT ค้าง แล้วกด RESET หนึ่งครั้ง");
+
+await port.close();
+
+alert("Erase mode ready (จากนั้นกด Flash ใหม่)");
+
+}catch(e){
+alert("Error: "+e);
+}
+
+}
+
+
+gen();
+
+</script>
+
+</body>
+</html>
